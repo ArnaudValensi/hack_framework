@@ -9,6 +9,6 @@ OUT_FILE=$1
 
 while [[ 1 ]]; do
     clear
-    ./read_sslstrip_log2.sh $OUT_FILE
+    ./read_sslstrip_log.sh $OUT_FILE
     sleep 2
 done
