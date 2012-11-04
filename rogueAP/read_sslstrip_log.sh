@@ -1,13 +1,22 @@
-#!/bin/bash
+#!/usr/bin/awk -f
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <file>"
-    exit 1
-fi
+BEGIN {
+    RED="\033[1;31m"
+    RST="\033[0m"
+    print ""
+}
 
-OUT_FILE=$1
-RED='\\e[1;31m'
-RST='\\e[0m'    # Text Reset
+/POST Data \(.*\)/ { 
+    c=2
 
-result=`cat $OUT_FILE | strings | grep "POST Data" -A 1 | sed "s/.* (\\(.*\\)):/$RED\&\&\\1$RST\&/"`
-echo -e $result | tr '&' '\n'
+    match($0, /POST Data \((.*)\)/, arr);
+    OFS=""
+    print RED, arr[1], RST
+    OFS=" "
+} 
+
+c-- == 1 {
+    FS="&"
+    for(i=1;i<=NF;i++) print $(i)
+    print ""
+}
